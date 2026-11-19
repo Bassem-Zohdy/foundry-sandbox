@@ -1,0 +1,79 @@
+{
+  "foundryVersion": "0.5.0",
+  "project": {
+    "name": "foundry-sandbox",
+    "kind": "new-product"
+  },
+  "mode": "solo",
+  "roles": {
+    "techLead": "Bassem-Zohdy",
+    "developers": []
+  },
+  "github": {
+    "repo": "Bassem-Zohdy/foundry-sandbox",
+    "baseBranch": "main"
+  },
+  "storyBranchRegex": "^cu-[a-z0-9]+-[a-z0-9][a-z0-9-]*$",
+  "packs": [
+    "python",
+    "react-vite"
+  ],
+  "stacks": [
+    "react-vite",
+    "python-fastapi"
+  ],
+  "tracker": {
+    "type": "none"
+  },
+  "modules": [
+    "core"
+  ],
+  "paths": {
+    "source": [
+      "app/**",
+      "dashboard/src/**"
+    ],
+    "tests": [
+      "tests/**",
+      "dashboard/src/**/*.test.jsx"
+    ]
+  },
+  "verify": [
+    {
+      "id": "quality",
+      "run": "sh scripts/foundry-quality/run.sh check",
+      "stages": [
+        "pre-push"
+      ]
+    },
+    {
+      "id": "dashboard-build",
+      "run": "npm --prefix dashboard run build",
+      "stages": [
+        "pre-push",
+        "ci"
+      ]
+    },
+    {
+      "id": "api-tests",
+      "run": "python3 -m pytest -q",
+      "stages": [
+        "pre-push",
+        "ci"
+      ]
+    }
+  ],
+  "packRoots": {
+    "react-vite": "dashboard"
+  },
+  "python": {
+    "package": "app"
+  },
+  "images": {
+    "api": {
+      "buildArgs": {
+        "APP_MODULE": "app.main:app"
+      }
+    }
+  }
+}

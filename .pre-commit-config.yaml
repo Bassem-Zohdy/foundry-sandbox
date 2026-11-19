@@ -1,0 +1,18 @@
+# pre-commit config. Install: `pre-commit install --hook-type commit-msg --hook-type pre-commit`
+repos:
+  - repo: local
+    hooks:
+      - id: foundry-commit-msg
+        name: foundry commit message check
+        entry: python3 scripts/foundry-hooks/commit-msg
+        language: system
+        stages: [commit-msg]
+        always_run: true
+      - id: foundry-quality-staged
+        name: foundry quality check on staged files
+        # Lints the staged files when a stack pack installed the script; a no-op otherwise.
+        entry: sh -c 'if [ -f scripts/foundry-quality/staged.sh ]; then sh scripts/foundry-quality/staged.sh; fi'
+        language: system
+        stages: [pre-commit]
+        pass_filenames: false
+        always_run: true

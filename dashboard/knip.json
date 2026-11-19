@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/main.{js,jsx,ts,tsx}",
+    "src/platform/foundry/index.ts",
+    "src/**/*.{spec,test}.{js,jsx,ts,tsx}",
+    "test/**/*.{ts,tsx}",
+    "app/**/{page,layout,route}.{ts,tsx}",
+    "src/app/**/{page,layout,route}.{ts,tsx}"
+  ],
+  "project": [
+    "src/**/*.{js,jsx,ts,tsx}",
+    "app/**/*.{ts,tsx}",
+    "test/**/*.{ts,tsx}"
+  ],
+  "ignoreDependencies": [
+    "@microsoft/eslint-formatter-sarif",
+    "dependency-cruiser",
+    "jscpd",
+    "knip",
+    "@eslint/js",
+    "typescript-eslint",
+    "eslint-plugin-sonarjs",
+    "eslint-plugin-n",
+    "eslint-plugin-security",
+    "globals",
+    "@next/eslint-plugin-next",
+    "eslint-plugin-jsx-a11y",
+    "eslint-plugin-react-hooks",
+    "eslint-plugin-react-refresh"
+  ]
+}

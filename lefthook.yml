@@ -1,0 +1,10 @@
+# Lefthook config. Install: `lefthook install`
+commit-msg:
+  commands:
+    foundry-attribution:
+      run: python3 scripts/foundry-hooks/commit-msg {1}
+pre-commit:
+  commands:
+    foundry-quality:
+      # Lints the staged files when a stack pack installed the script; a no-op otherwise.
+      run: if [ -f scripts/foundry-quality/staged.sh ]; then sh scripts/foundry-quality/staged.sh; fi
