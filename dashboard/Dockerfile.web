@@ -15,7 +15,7 @@ COPY . .
 RUN rm -f .env .env.* && mkdir -p public && find public -name '.env*' -delete && npm run build \
     && find dist -name '*.map' -delete
 
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine AS runtime
 # The API's origin for the CSP connect-src; empty when the app calls its own host.
 ENV API_ORIGIN=""
 # envsubst replaces only these variables in the template, never nginx's own ($uri).
