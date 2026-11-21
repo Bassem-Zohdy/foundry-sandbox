@@ -139,7 +139,7 @@ jobs:
         run: docker save foundry-image-${{ matrix.name }}:ci -o "$RUNNER_TEMP/image.tar"
       - name: Upload the scanned image
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: image-${{ matrix.name }}
           path: ${{ runner.temp }}/image.tar
