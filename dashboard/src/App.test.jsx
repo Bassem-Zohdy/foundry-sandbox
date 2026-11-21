@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
-import { parseResponse } from "./foundry/api";
+import { renderToString } from "react-dom/server";
+import App from "./App.jsx";
 
-describe("health response", () => {
-  it("accepts the API's health body", async () => {
-    const response = new Response(JSON.stringify({ status: "ok" }), { status: 200 });
-    await expect(parseResponse(z.object({ status: z.string() }), response)).resolves.toEqual({ status: "ok" });
+describe("App", () => {
+  it("renders the app shell with the API status", () => {
+    const html = renderToString(<App />);
+    expect(html).toContain('data-testid="app-shell"');
+    expect(html).toContain("API: <!-- -->checking");
   });
 });
