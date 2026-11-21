@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import App from "./App.jsx";
+import { z } from "zod";
+import { parseResponse } from "./foundry/api";
 
-describe("App", () => {
-  it("renders the sandbox heading", () => {
-    const element = App();
-    expect(element.props.children).toBe("foundry sandbox");
+describe("health response", () => {
+  it("accepts the API's health body", async () => {
+    const response = new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    await expect(parseResponse(z.object({ status: z.string() }), response)).resolves.toEqual({ status: "ok" });
   });
 });
