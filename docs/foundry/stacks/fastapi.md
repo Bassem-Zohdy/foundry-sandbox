@@ -130,7 +130,7 @@ How the pieces behave:
 
 ## Image
 
-`Dockerfile.api` builds a two-stage image on `python:3.12.15-slim-bookworm`:
+`Dockerfile.api` builds a two-stage image on `python:3.12.16-slim-bookworm`:
 `docker build -f Dockerfile.api --build-arg APP_MODULE=app.main:app -t api .` (the build fails when `APP_MODULE` is
 empty). Dependencies come from `uv.lock` (`uv sync --frozen --no-dev`, uv pinned by `UV_VERSION`) or else from
 `requirements.txt`; with neither the build stops with a message. Keep test tools out of `requirements.txt` (put them

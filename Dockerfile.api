@@ -3,7 +3,7 @@
 #   docker build -f Dockerfile.api --build-arg APP_MODULE=<package>.main:app -t api .
 # Dependencies come from uv.lock (`uv sync --frozen --no-dev`) or else from requirements.txt.
 
-FROM python:3.12.15-slim-bookworm AS build
+FROM python:3.12.16-slim-bookworm AS build
 ARG APP_MODULE
 ARG UV_VERSION=0.13.7
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 UV_PROJECT_ENVIRONMENT=/venv
@@ -23,7 +23,7 @@ RUN python -m venv /venv \
          echo "Dockerfile.api: no uv.lock or requirements.txt in the build context; add one to install the dependencies" >&2; exit 1; \
        fi
 
-FROM python:3.12.15-slim-bookworm AS runtime
+FROM python:3.12.16-slim-bookworm AS runtime
 ARG APP_MODULE
 RUN test -n "$APP_MODULE" || { echo "Dockerfile.api: pass --build-arg APP_MODULE=<module>:<app>" >&2; exit 1; }
 ENV APP_MODULE=$APP_MODULE PORT=8000 PATH=/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1

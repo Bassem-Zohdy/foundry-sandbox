@@ -27,6 +27,12 @@
     "@next/eslint-plugin-next",
     "eslint-plugin-jsx-a11y",
     "eslint-plugin-react-hooks",
-    "eslint-plugin-react-refresh"
+    "eslint-plugin-react-refresh",
+    "eslint",
+    "typescript",
+    "vitest",
+    "@vitest/coverage-v8",
+    "@playwright/test",
+    "@vitejs/plugin-react"
   ]
 }

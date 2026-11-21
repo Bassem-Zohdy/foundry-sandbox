@@ -34,7 +34,7 @@ A review (approval, changes requested or dismissal) and a `/approve-*` comment f
 - Images are not restricted in story files. An image in the title, header table or Ledger could show a picture of a fake plan. It cannot hide or change the approved text, so read the Plan as text, not pictures, before approving.
 - Removing a `gate:*` label makes `foundry / gate-approved` pass as "not applicable". Whoever can edit labels can drop a gate.
 - GitHub cannot tell the tech lead from an agent session that holds the tech lead's token. The agent hooks refuse approval comments and approving reviews, but they are client-side guardrails: anyone holding the token can post an approval outside them.
-- The governance checks fail on the setup pull request itself, because the base branch has no `scripts/foundry-ci/` until it merges.
+- On the pull request that installs Foundry, the base branch has no `scripts/foundry-ci/` yet, so `foundry / attribution`, `foundry / plan-approved` and `foundry / gate-approved` print a notice and pass as "not applicable" when the pull request targets the default branch (a pull request into any other branch without Foundry CI fails). On a repo whose base later lost `scripts/foundry-ci/`, the three checks pass the same way; only a merge that passed them can remove it.
 
 ### Troubleshooting
 

@@ -13,6 +13,11 @@
 # copy of the checker on the PR head's foundry.json, docs/ and tests, which
 # are extracted as data into head/ and never executed.
 #
+# The pull request that installs Foundry has a base branch with no
+# scripts/foundry-ci/ yet. The three required jobs then print one notice and
+# pass as not applicable (ruling R31), but only when the pull request targets the
+# default branch; a pull request aimed at any other branch without it fails. If the checker exists, it always runs.
+#
 # Approval comments and reviews re-run this workflow's pull_request run from
 # foundry-approval-rerun.yml instead.
 name: foundry-governance
@@ -40,7 +45,18 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           REPO: ${{ github.repository }}
-        run: python3 scripts/foundry-ci/run.py check attribution --pr "$PR" --expect-head "$HEAD" --repo-slug "$REPO"
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ ! -f scripts/foundry-ci/run.py ]; then
+            if [ "$BASE_REF" != "$DEFAULT_BRANCH" ]; then
+              echo "::error::the base branch $BASE_REF has no Foundry CI; target $DEFAULT_BRANCH"
+              exit 2
+            fi
+            echo "::notice::not applicable: the base branch has no Foundry CI yet (this pull request installs Foundry)"
+            exit 0
+          fi
+          python3 scripts/foundry-ci/run.py check attribution --pr "$PR" --expect-head "$HEAD" --repo-slug "$REPO"
 
   plan-approved:
     name: foundry / plan-approved
@@ -56,7 +72,18 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           REPO: ${{ github.repository }}
-        run: python3 scripts/foundry-ci/run.py check approval --pr "$PR" --expect-head "$HEAD" --repo-slug "$REPO" --kind plan
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ ! -f scripts/foundry-ci/run.py ]; then
+            if [ "$BASE_REF" != "$DEFAULT_BRANCH" ]; then
+              echo "::error::the base branch $BASE_REF has no Foundry CI; target $DEFAULT_BRANCH"
+              exit 2
+            fi
+            echo "::notice::not applicable: the base branch has no Foundry CI yet (this pull request installs Foundry)"
+            exit 0
+          fi
+          python3 scripts/foundry-ci/run.py check approval --pr "$PR" --expect-head "$HEAD" --repo-slug "$REPO" --kind plan
 
   gate-approved:
     name: foundry / gate-approved
@@ -72,7 +99,18 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           REPO: ${{ github.repository }}
-        run: python3 scripts/foundry-ci/run.py check approval --pr "$PR" --expect-head "$HEAD" --repo-slug "$REPO" --kind gates
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ ! -f scripts/foundry-ci/run.py ]; then
+            if [ "$BASE_REF" != "$DEFAULT_BRANCH" ]; then
+              echo "::error::the base branch $BASE_REF has no Foundry CI; target $DEFAULT_BRANCH"
+              exit 2
+            fi
+            echo "::notice::not applicable: the base branch has no Foundry CI yet (this pull request installs Foundry)"
+            exit 0
+          fi
+          python3 scripts/foundry-ci/run.py check approval --pr "$PR" --expect-head "$HEAD" --repo-slug "$REPO" --kind gates
 
   traceability:
     name: foundry / traceability
