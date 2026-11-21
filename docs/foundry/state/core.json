@@ -1,0 +1,16 @@
+{
+  "gates": {},
+  "history": [
+    {
+      "at": "2026-11-21T14:04:10Z",
+      "by": "Bassem-Zohdy",
+      "event": "gate G1 requested",
+      "note": "",
+      "stage": "design"
+    }
+  ],
+  "module": "core",
+  "stage": "design",
+  "takeover": "none",
+  "track": "product"
+}
