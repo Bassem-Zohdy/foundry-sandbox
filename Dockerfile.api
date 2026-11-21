@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+# Foundry: API image. Build with
+#   docker build -f Dockerfile.api --build-arg APP_MODULE=<package>.main:app -t api .
+# Dependencies come from uv.lock (`uv sync --frozen --no-dev`) or else from requirements.txt.
+
+FROM python:3.12.16-slim-bookworm AS build
+ARG APP_MODULE
+ARG UV_VERSION=0.13.7
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 UV_PROJECT_ENVIRONMENT=/venv
+RUN test -n "$APP_MODULE" || { echo "Dockerfile.api: pass --build-arg APP_MODULE=<module>:<app>, for example app.main:app" >&2; exit 1; }
+WORKDIR /src
+COPY . .
+# Env files, git data, tests and local venvs never go into an image: BuildKit reads
+# Dockerfile.api.dockerignore, the classic builder does not, so delete them here as well.
+RUN rm -rf .git .venv venv tests && find . -name '.env*' -prune -exec rm -rf {} + \
+    && find . \( -name '__pycache__' -o -name node_modules \) -prune -exec rm -rf {} +
+RUN python -m venv /venv \
+    && if [ -f uv.lock ]; then \
+         pip install "uv==$UV_VERSION" && uv sync --frozen --no-dev --no-editable; \
+       elif [ -f requirements.txt ]; then \
+         /venv/bin/pip install -r requirements.txt; \
+       else \
+         echo "Dockerfile.api: no uv.lock or requirements.txt in the build context; add one to install the dependencies" >&2; exit 1; \
+       fi
+
+FROM python:3.12.16-slim-bookworm AS runtime
+ARG APP_MODULE
+RUN test -n "$APP_MODULE" || { echo "Dockerfile.api: pass --build-arg APP_MODULE=<module>:<app>" >&2; exit 1; }
+ENV APP_MODULE=$APP_MODULE PORT=8000 PATH=/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+RUN groupadd --gid 10001 app && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin app
+COPY --from=build /venv /venv
+COPY --from=build /src /app
+WORKDIR /app
+# Files stay root-owned: the app user can read them and write nothing.
+USER 10001:10001
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health/live' % os.environ.get('PORT', '8000'), timeout=2)"
+# exec: uvicorn is PID 1 and gets SIGTERM itself. --no-proxy-headers: client_ip (TRUST_PROXY) is the
+# only reader of X-Forwarded-For, so uvicorn must not rewrite the peer address first.
+CMD exec uvicorn "$APP_MODULE" --host 0.0.0.0 --port "$PORT" --no-proxy-headers --timeout-graceful-shutdown "${SHUTDOWN_TIMEOUT_S:-20}"

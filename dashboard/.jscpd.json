@@ -1,0 +1,19 @@
+{
+  "minTokens": 70,
+  "minLines": 5,
+  "format": ["typescript", "tsx", "javascript", "jsx"],
+  "reporters": ["json"],
+  "gitignore": true,
+  "absolute": false,
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/coverage/**",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

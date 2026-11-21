@@ -1,0 +1,20 @@
+# Foundry security rules for a React app built with Vite. Each rule is an error, so every finding
+# counts against the quality baseline. Run by scripts/foundry-quality/run.sh; documented in
+# docs/foundry/stacks/react-vite.md ("Security rules (Semgrep)").
+rules:
+  - id: foundry.vite-public-secret
+    # A regular expression over every file that can carry a VITE_ name into a build: the
+    # source (any form: member, destructuring, optional chaining, a cast, a readEnv schema key),
+    # .env files, a Dockerfile ARG and foundry.json images.<name>.buildArgs (`foundry*.json` so
+    # that `semgrep --test` also reads the foundry-vite.*.json fixture).
+    languages: [generic]
+    severity: ERROR
+    message: >-
+      VITE_ variables are shipped to every browser: Vite writes each one it finds into the built
+      JavaScript. A name with SECRET, PRIVATE, PASSWORD or SERVICE_ROLE says it must stay on a
+      server; keep the value in the API and call the API instead. See
+      docs/foundry/stacks/react-vite.md, section "Security rules (Semgrep)".
+    paths:
+      include: ["*.js", "*.jsx", "*.mjs", "*.cjs", "*.ts", "*.tsx", "*.mts", "*.cts",
+                ".env", ".env.*", "*.env", "Dockerfile*", "*.Dockerfile", "foundry*.json"]
+    pattern-regex: \bVITE_\w*(SECRET|PRIVATE|PASSWORD|SERVICE_ROLE)\w*

@@ -1,0 +1,254 @@
+# Foundry security rules for Python. Each rule is an error, so every finding counts against the
+# quality baseline. Run by scripts/foundry-quality/run.sh; the rules and the exemption format are
+# documented in docs/foundry/stacks/fastapi.md, python.md and celery.md ("Security rules (Semgrep)").
+rules:
+  - id: foundry.py-cors-wildcard-credentials
+    languages: [python]
+    severity: ERROR
+    message: >-
+      CORS allows any origin together with credentials. List the allowed origins from
+      configuration instead of ["*"] or ".*". See docs/foundry/stacks/fastapi.md, section
+      "Security rules (Semgrep)".
+    patterns:
+      - pattern-either:
+          - pattern: $FUNC(..., allow_origins=["*"], ..., allow_credentials=True, ...)
+          - pattern: $FUNC(..., allow_origin_regex=".*", ..., allow_credentials=True, ...)
+
+  - id: foundry.py-sql-string-build
+    languages: [python]
+    severity: ERROR
+    message: >-
+      SQL is built from a string. Pass the values as bound parameters (text("... :id") with a
+      dict, or %s with a tuple) instead of an f-string, %, .format( or +. See
+      docs/foundry/stacks/python.md, section "Security rules (Semgrep)".
+    patterns:
+      - pattern-either:
+          - pattern: $O.$M(f"...", ...)
+          - pattern: $O.$M("..." % $V, ...)
+          - pattern: $O.$M("...".format(...), ...)
+          - pattern: $O.$M($A + $B, ...)
+          - pattern: text(f"...", ...)
+          - pattern: text("..." % $V, ...)
+          - pattern: text("...".format(...), ...)
+          - pattern: text($A + $B, ...)
+          - patterns:
+              - pattern: $O.$M($Q, ...)
+              - pattern-either:
+                  - pattern-inside: |
+                      $Q = f"..."
+                      ...
+                  - pattern-inside: |
+                      $Q = "..." % $V
+                      ...
+                  - pattern-inside: |
+                      $Q = "...".format(...)
+                      ...
+                  - pattern-inside: |
+                      $Q = $A + $B
+                      ...
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(text|execute|executemany|raw|exec_driver_sql)$
+      - pattern-not: $O.$M("..." + "...", ...)
+      - pattern-not: text("..." + "...", ...)
+
+  - id: foundry.py-body-without-validation
+    languages: [python]
+    severity: ERROR
+    message: >-
+      The request body is read without a schema. Declare a Pydantic model as the handler
+      parameter, or pass the body to Model.model_validate(...), TypeAdapter(...).validate_python(...)
+      TypeAdapter(...).validate_json(...), Model.model_validate_json(...)
+      or parse_body(...) in the same function. See docs/foundry/stacks/fastapi.md, section
+      "Security rules (Semgrep)".
+    patterns:
+      - pattern-either:
+          - pattern: await $REQ.json()
+          - pattern: await $REQ.body()
+          - pattern: await $REQ.form()
+      - pattern-inside:
+          pattern-either:
+            - pattern: |
+                @$R.$D(...)
+                async def $FUNC(..., $REQ, ...):
+                    ...
+            - pattern: |
+                @$R.$D(...)
+                async def $FUNC(..., $REQ: $T, ...):
+                    ...
+      - pattern-not-inside: |
+          @$R.$D(...)
+          async def $FUNC(...):
+              ...
+              $MODEL.model_validate(...)
+              ...
+      - pattern-not-inside: |
+          @$R.$D(...)
+          async def $FUNC(...):
+              ...
+              TypeAdapter(...).validate_python(...)
+              ...
+      - pattern-not-inside: |
+          @$R.$D(...)
+          async def $FUNC(...):
+              ...
+              parse_body(...)
+              ...
+      - pattern-not-inside: |
+          @$R.$D(...)
+          async def $FUNC(...):
+              ...
+              $MODEL.model_validate_json(...)
+              ...
+      - pattern-not-inside: |
+          @$R.$D(...)
+          async def $FUNC(...):
+              ...
+              TypeAdapter(...).validate_json(...)
+              ...
+
+  - id: foundry.py-tls-verification-disabled
+    languages: [python]
+    severity: ERROR
+    message: >-
+      TLS certificate verification is turned off. Remove verify=False, CERT_NONE and
+      check_hostname = False; trust the right CA through verify="<ca bundle path>" or an
+      ssl.create_default_context(cafile=...) instead. See docs/foundry/stacks/python.md, section
+      "Security rules (Semgrep)".
+    pattern-either:
+      - pattern: $FUNC(..., verify=False, ...)
+      - pattern: $S.verify = False
+      - pattern: ssl._create_unverified_context(...)
+      - pattern: ssl._create_unverified_context
+      - pattern: ssl.CERT_NONE
+      - pattern: $C.check_hostname = False
+
+  - id: foundry.py-cookie-flags
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A cookie is set without httponly=True, a secure flag (True, a boolean variable or a
+      comparison with "production") and samesite. Pass them as keyword arguments in the call. See
+      docs/foundry/stacks/fastapi.md, section "Security rules (Semgrep)".
+    patterns:
+      - pattern: $RES.set_cookie(...)
+      - pattern-not:
+          patterns:
+            - pattern: $RES.set_cookie(..., httponly=True, ...)
+            - pattern-either:
+                - pattern: $RES.set_cookie(..., secure=True, ...)
+                - pattern: $RES.set_cookie(..., secure=$E == "production", ...)
+                - pattern: $RES.set_cookie(..., secure="production" == $E, ...)
+                - pattern: $RES.set_cookie(..., secure=$E != "development", ...)
+                - pattern: $RES.set_cookie(..., secure="development" != $E, ...)
+                - patterns:
+                    - pattern: $RES.set_cookie(..., secure=$FLAG, ...)
+                    - metavariable-regex:
+                        metavariable: $FLAG
+                        regex: ^(?!(False|None)$)[A-Za-z_][A-Za-z0-9_.]*$
+            - pattern: $RES.set_cookie(..., samesite=$S, ...)
+
+  - id: foundry.py-public-route-no-rate-limit
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A @public route has no rate limit. Add dependencies=[Depends(rate_limit(limit, window_s))] to
+      the route decorator or a rate_limit(...) parameter dependency, or write "# foundry:
+      rate-limit exempt — <reason>" on the line above the decorators. See
+      docs/foundry/stacks/fastapi.md, section "Security rules (Semgrep)".
+    patterns:
+      - pattern-regex: '@public\b'
+      - pattern-inside:
+          pattern-either:
+            - pattern: |
+                @public
+                def $FUNC(...):
+                    ...
+            - pattern: |
+                @public
+                async def $FUNC(...):
+                    ...
+      - pattern-not-inside:
+          pattern-regex: '# foundry: rate-limit exempt — \S[^\n]*\n(?:[ \t]*(?:#|@)[^\n]*\n)*?[ \t]*@public\b'
+      - pattern-not-inside: |
+          @$R.$D(..., dependencies=[..., Depends(rate_limit(...)), ...], ...)
+          def $FUNC(...):
+              ...
+      - pattern-not-inside: |
+          @$R.$D(..., dependencies=[..., Depends(rate_limit(...)), ...], ...)
+          async def $FUNC(...):
+              ...
+      - pattern-not-inside: |
+          @$R.$D(..., dependencies=[..., rate_limit(...), ...], ...)
+          def $FUNC(...):
+              ...
+      - pattern-not-inside: |
+          @$R.$D(..., dependencies=[..., rate_limit(...), ...], ...)
+          async def $FUNC(...):
+              ...
+      - pattern-not-inside: |
+          def $FUNC(..., $P = Depends(rate_limit(...)), ...):
+              ...
+      - pattern-not-inside: |
+          async def $FUNC(..., $P = Depends(rate_limit(...)), ...):
+              ...
+      - pattern-not-inside: |
+          def $FUNC(..., $P: $T = Depends(rate_limit(...)), ...):
+              ...
+      - pattern-not-inside: |
+          async def $FUNC(..., $P: $T = Depends(rate_limit(...)), ...):
+              ...
+      - pattern-not-inside: |
+          def $FUNC(..., $P: Annotated[$T, Depends(rate_limit(...))], ...):
+              ...
+      - pattern-not-inside: |
+          async def $FUNC(..., $P: Annotated[$T, Depends(rate_limit(...))], ...):
+              ...
+
+  - id: foundry.py-celery-result-get-in-task
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A task waits for another task's result with .get(). It holds a worker slot while it waits and
+      deadlocks the pool when every slot does the same. Chain with a Celery canvas (chain, chord,
+      link) or pass the next step as a callback. See docs/foundry/stacks/celery.md, section
+      "Security rules (Semgrep)".
+    patterns:
+      - pattern-either:
+          - pattern: $T.delay(...).get(...)
+          - pattern: $T.apply_async(...).get(...)
+          - pattern: AsyncResult(...).get(...)
+          - pattern: $A.AsyncResult(...).get(...)
+          - patterns:
+              - pattern: $R.get(...)
+              - pattern-either:
+                  - pattern-inside: |
+                      $R = $T.delay(...)
+                      ...
+                  - pattern-inside: |
+                      $R = $T.apply_async(...)
+                      ...
+                  - pattern-inside: |
+                      $R = AsyncResult(...)
+                      ...
+                  - pattern-inside: |
+                      $R = $A.AsyncResult(...)
+                      ...
+      - pattern-inside:
+          pattern-either:
+            - pattern: |
+                @$A.task
+                def $FUNC(...):
+                    ...
+            - pattern: |
+                @$A.task(...)
+                def $FUNC(...):
+                    ...
+            - pattern: |
+                @shared_task
+                def $FUNC(...):
+                    ...
+            - pattern: |
+                @shared_task(...)
+                def $FUNC(...):
+                    ...

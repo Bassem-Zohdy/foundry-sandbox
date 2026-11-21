@@ -1,0 +1,10 @@
+# The python pack's quality and CI tools, installed by setup.sh into the Foundry scratch area
+# (<git-common-dir>/foundry/tools/python-venv), not into a developer's environment. In CI,
+# `setup.sh <root> --project` also installs them into the CI Python with the project's
+# requirements: coverage.sh runs pytest there, with pytest-cov.
+# Exact pins, each release at least 14 days old when pinned.
+# jscpd is an npm package; setup.sh pins it (JSCPD_VERSION) and installs it beside the venv.
+ruff==0.17.3
+vulture==2.16
+pip-audit==2.10.1
+pytest-cov==7.1.0

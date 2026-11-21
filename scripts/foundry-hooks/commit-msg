@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Reject commit messages that carry AI attribution.
+
+Standalone copy of the rules in foundry_cli/attribution.py (the template must
+not need the plugin installed). Keep both in sync; tests enforce it.
+Usage: commit-msg <message-file>
+"""
+import re
+import sys
+
+PATTERNS = [
+    re.compile(r"co-authored-by:.*(claude|anthropic)", re.IGNORECASE),
+    re.compile(r"generated with .*claude", re.IGNORECASE),
+    re.compile("\U0001F916 generated", re.IGNORECASE),
+]
+ALLOWED = re.compile(r"(?<![A-Za-z0-9_.])CLAUDE\.md(?![A-Za-z0-9_])"
+                     r"|(?<![^\s/'\"`()])\.claude(?![^/\s'\"`():,])")
+WORD = re.compile(r"claude|anthropic", re.IGNORECASE)
+# `git commit -v` writes this line, git's hint comments, then the staged diff.
+SCISSORS = "# ------------------------ >8 ------------------------"
+
+
+def offends(line):
+    if any(p.search(line) for p in PATTERNS):
+        return True
+    return bool(WORD.search(ALLOWED.sub(" ", line)))
+
+
+def strip_verbose_diff(text):
+    """Drop the text below the scissors line only when a diff follows it."""
+    lines = text.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if line.rstrip("\r\n") != SCISSORS:
+            continue
+        rest = [ln for ln in lines[i + 1:] if not ln.startswith("#")]
+        if rest and rest[0].startswith("diff --git "):
+            return "".join(lines[:i])
+    return text
+
+
+def main(argv):
+    if len(argv) != 2:
+        print("usage: commit-msg <message-file>", file=sys.stderr)
+        return 2
+    try:
+        with open(argv[1], encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"commit-msg: cannot read {argv[1]}: {e}", file=sys.stderr)
+        return 2
+    lines = strip_verbose_diff(text).splitlines()
+    # '#' lines are checked too: git only strips them after an editor session.
+    bad = [ln for ln in lines if offends(ln)]
+    for ln in bad:
+        print(ln, file=sys.stderr)
+    if bad:
+        print("commit-msg: AI attribution is not allowed in commit messages", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
