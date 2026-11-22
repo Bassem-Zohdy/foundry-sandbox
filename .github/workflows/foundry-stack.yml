@@ -7,7 +7,7 @@
 #
 # Every job checks out the PR with its history, restores the gate files from the base branch
 # (scripts/foundry-quality/trusted-gate.sh; see D10 in the design) and only then runs the
-# foundry-setup action (Node 22, Python 3.12 and each enabled pack's
+# foundry-setup action (Node 24, Python 3.12 and each enabled pack's
 # scripts/foundry-quality/packs/<pack>/setup.sh). The per-pack steps read the
 # packs and their roots with `run.py pack roots`.
 name: foundry-stack

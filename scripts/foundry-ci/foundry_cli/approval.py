@@ -9,12 +9,16 @@ from typing import Callable, Dict, List, Optional, Tuple
 from .cli import register
 from .codeowners import TECH_LEAD_DOCS
 from .config import Config, ConfigError, load_config
-from .gh import GitHub, get_github
+from .dep_update import commit_problem, dependency_problem, is_dependabot
+from .gh import GitHub, PrInfo, get_github
 from .story_rules import story_problem, watched_story
 
 _STORY_RE = re.compile(r"^docs/stories/[^/]+\.md$")
 GATE_LABELS = ("gate:G1", "gate:G2", "gate:G2-short", "gate:TAKEOVER", "gate:G4")
 _KIND_RE = re.compile(r"^(plan|gate:[A-Za-z0-9_-]+)$")
+# check_approval also takes "deps": the /approve-deps route for a dependency-only Dependabot PR.
+# It is not a CLI kind; check_pr picks it for the "plan" kind.
+_APPROVAL_KIND_RE = re.compile(r"^(plan|deps|gate:[A-Za-z0-9_-]+)$")
 
 
 @dataclass
@@ -41,24 +45,27 @@ def _same_user(a: str, b: str) -> bool:
 
 def check_approval(gh: GitHub, config: Config, pr: int, kind: str,
                    watched: Callable[[str], Optional[str]],
-                   paths: List[str]) -> ApprovalResult:
+                   paths: List[str], head: Optional[str] = None) -> ApprovalResult:
     """Did config.tech_lead approve `kind` for the PR's current head content?
 
     Approval is content-addressed: commit dates are never read. A plan approval
     names a commit sha whose watched content equals the head's; a gate approval
     is an approving review on the head or a comment naming the head.
     """
-    if not _KIND_RE.match(kind):
+    if not _APPROVAL_KIND_RE.match(kind):
         raise ValueError(f"unknown kind {kind!r}; use plan or gate:<id>, e.g. gate:G1")
+    # A gate and a dependency approval share one rule: a comment naming the head, or an
+    # approving review on the head. Only the plan approval is content-addressed.
     is_gate = kind != "plan"
-    prefix = "/approve-gate " + kind.split(":", 1)[1] if is_gate else "/approve-plan"
+    prefix = {"plan": "/approve-plan", "deps": "/approve-deps"}.get(kind) \
+        or "/approve-gate " + kind.split(":", 1)[1]
     repo, lead = config.repo, config.tech_lead
 
     commits = gh.pr_commits(repo, pr)
     if len(commits) >= MAX_COMMITS:
         return ApprovalResult(False, "PR too large for the approval check "
                                      f"({len(commits)} commits, limit {MAX_COMMITS - 1})")
-    head = gh.pr_head(repo, pr).lower()
+    head = (head or gh.pr_head(repo, pr)).lower()
     shas = [c.sha.lower() for c in commits]
     if head not in shas:
         return ApprovalResult(False, f"PR head {head[:7]} is not among the PR's commits")
@@ -139,6 +146,7 @@ def check_pr(gh: GitHub, config: Config, pr: int, kind: str) -> ApprovalResult:
     """Resolve the watched files for `kind` from the PR, then run check_approval."""
     if not _KIND_RE.match(kind):
         raise ValueError(f"unknown kind {kind!r}; use plan or gate:<id>, e.g. gate:G1")
+    head0 = gh.pr_head(config.repo, pr)  # read before the file list; a dependency PR re-checks it
     files = gh.pr_files(config.repo, pr)
     if len(files) >= MAX_FILES:
         return ApprovalResult(False, "PR too large for the approval check "
@@ -146,6 +154,10 @@ def check_pr(gh: GitHub, config: Config, pr: int, kind: str) -> ApprovalResult:
     if kind == "plan":
         stories = [f for f in files if _STORY_RE.match(f)]
         if not stories:
+            if files:
+                info = gh.pr_info(config.repo, pr)
+                if is_dependabot(info):
+                    return _dependency_pr(gh, config, pr, info, files, head0)
             if files and all(_tech_lead_doc(f) for f in files):
                 gate = next((l for l in gh.pr_info(config.repo, pr).labels
                              if l in GATE_LABELS), None)
@@ -155,6 +167,22 @@ def check_pr(gh: GitHub, config: Config, pr: int, kind: str) -> ApprovalResult:
             return ApprovalResult(False, "no story file in PR")
         return check_approval(gh, config, pr, kind, watched_story, stories)
     return check_approval(gh, config, pr, kind, lambda t: t, files)
+
+
+def _dependency_pr(gh: GitHub, config: Config, pr: int, info: PrInfo,
+                   files: List[str], head: str) -> ApprovalResult:
+    """The /approve-deps route: a Dependabot PR whose every change is dependency-only."""
+    if gh.pr_head(config.repo, pr).lower() != head.lower():
+        return ApprovalResult(False, "head moved while the PR was being checked; a newer run will report")
+    problem = (commit_problem(gh.pr_commits(config.repo, pr))
+               or dependency_problem(gh, config.repo, info, files, head))
+    if problem:
+        return ApprovalResult(False, f"no story file in PR; it is a Dependabot PR but {problem}")
+    result = check_approval(gh, config, pr, "deps", lambda t: t, files, head)
+    if result.ok:
+        return ApprovalResult(True, f"{result.reason} (dependency-only Dependabot PR)")
+    return ApprovalResult(False, result.reason.replace(
+        "not approved (", "not approved: dependency-only Dependabot PR (", 1))
 
 
 def context_problem(gh: GitHub, config: Config, pr: int, expect_head: Optional[str],

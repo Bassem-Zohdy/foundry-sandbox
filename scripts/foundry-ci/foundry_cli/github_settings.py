@@ -1,4 +1,5 @@
-"""GitHub protection for a product repo: the branch ruleset and the production environment.
+"""GitHub protection for a product repo: the branch ruleset, the production environment
+and the gate labels.
 
 `plan_settings` reads the current GitHub state and diffs it against the payloads
 built here. `apply_settings` sends only the changes. Nothing is written without
@@ -12,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from .approval import GATE_LABELS
 from .cli import register
 from .config import Config, ConfigError, load_config
 from .gh import GhError, GitHub, get_github
@@ -37,7 +39,7 @@ _PLAN_WORDS = ("upgrade", "plan")
 
 @dataclass
 class SettingChange:
-    target: str  # "ruleset" | "environment"
+    target: str  # "ruleset" | "environment" | "labels"
     action: str  # "create" | "update" | "unchanged" | "blocked"
     method: str = ""
     path: str = ""
@@ -46,6 +48,7 @@ class SettingChange:
     diff: List[str] = field(default_factory=list)  # "+ added" / "~ raised" lines, never removals
     warnings: List[str] = field(default_factory=list)
     followups: List[Tuple[str, str, dict]] = field(default_factory=list)  # calls sent after the main one
+    calls: List[Tuple[str, str, dict]] = field(default_factory=list)  # labels: one POST per missing label
 
 
 def build_ruleset(config: Config) -> dict:
@@ -201,7 +204,7 @@ def _merge_environment(current: dict, config: Config,
     return body, diff
 
 
-def _list_rulesets(gh: GitHub, base: str) -> List[dict]:
+def _paginated(gh: GitHub, base: str) -> List[dict]:
     out: List[dict] = []
     page = 1
     while True:
@@ -217,7 +220,7 @@ def _list_rulesets(gh: GitHub, base: str) -> List[dict]:
 
 def _plan_ruleset(gh: GitHub, config: Config) -> SettingChange:
     base = f"repos/{config.repo}/rulesets"
-    existing = next((r for r in _list_rulesets(gh, base)
+    existing = next((r for r in _paginated(gh, base)
                      if r.get("name") == RULESET_NAME
                      and r.get("source_type", "Repository") == "Repository"), None)
     if existing is None:
@@ -245,9 +248,29 @@ def _plan_environment(gh: GitHub, config: Config) -> SettingChange:
                          diff=diff)
 
 
+LABEL_COLOR = "5319e7"
+LABEL_DESCRIPTION = "Foundry gate PR"
+
+
+def _list_labels(gh: GitHub, base: str) -> List[str]:
+    return [l.get("name", "") for l in _paginated(gh, base)]
+
+
+def _plan_labels(gh: GitHub, config: Config) -> SettingChange:
+    """Create each gate label that is missing. Existing labels are never changed."""
+    base = f"repos/{config.repo}/labels"
+    have = {n.casefold() for n in _list_labels(gh, base)}
+    missing = [n for n in GATE_LABELS if n.casefold() not in have]
+    calls = [("POST", base, {"name": n, "color": LABEL_COLOR, "description": LABEL_DESCRIPTION})
+             for n in missing]
+    return SettingChange("labels", "create" if calls else "unchanged", "POST", base,
+                         diff=[f"+ label {n}" for n in missing], calls=calls)
+
+
 def plan_settings(gh: GitHub, config: Config) -> List[SettingChange]:
     changes = []
-    for target, fn in (("ruleset", _plan_ruleset), ("environment", _plan_environment)):
+    for target, fn in (("ruleset", _plan_ruleset), ("environment", _plan_environment),
+                       ("labels", _plan_labels)):
         try:
             changes.append(fn(gh, config))
         except GhError as e:
@@ -264,6 +287,14 @@ def apply_settings(gh: GitHub, changes: List[SettingChange]) -> List[SettingChan
     for c in changes:
         if c.action == "blocked":
             blocked.append(c)
+        elif c.target == "labels":
+            for method, path, body in c.calls:
+                try:
+                    gh.api(method, path, body)
+                except GhError as e:
+                    # A label created between plan and apply is the state we want.
+                    if e.status != 422:
+                        raise
         elif c.action in ("create", "update"):
             try:
                 gh.api(c.method, c.path, c.body)
@@ -286,10 +317,12 @@ def apply_settings(gh: GitHub, changes: List[SettingChange]) -> List[SettingChan
 
 
 def _describe(c: SettingChange) -> str:
-    name = RULESET_NAME if c.target == "ruleset" else "production"
+    name = {"ruleset": RULESET_NAME, "environment": "production"}.get(c.target, "gate labels")
     if c.action == "blocked":
         return f"{c.target} {name}: blocked: {c.reason}"
     suffix = f" ({c.method} {c.path})" if c.action in ("create", "update") else ""
+    if c.target == "labels":
+        suffix = f" ({len(c.calls)} POST {c.path})" if c.calls else ""
     lines = [f"{c.target} {name}: {c.action}{suffix}"]
     lines += [f"    {d}" for d in c.diff]
     lines += [f"    warn: {w}" for w in c.warnings]
