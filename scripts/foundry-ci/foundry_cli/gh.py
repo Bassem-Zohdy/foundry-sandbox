@@ -57,6 +57,9 @@ class PrInfo:
     head_sha: str
     head_ref: str  # head branch name
     labels: Tuple[str, ...] = ()
+    author: str = ""  # the PR author's login
+    author_type: str = ""  # the API's user.type: "User", "Bot", ...
+    base_sha: str = ""  # the base branch tip the PR was last compared with
 
 
 @dataclass(frozen=True)
@@ -154,8 +157,11 @@ class GhCli:
 
     def pr_info(self, repo: str, pr: int) -> PrInfo:
         d = self._get(f"repos/{repo}/pulls/{pr}")
+        user = d.get("user") or {}
         return PrInfo(d.get("title") or "", d.get("body") or "", d["head"]["sha"],
-                      d["head"]["ref"], tuple(l["name"] for l in d.get("labels") or []))
+                      d["head"]["ref"], tuple(l["name"] for l in d.get("labels") or []),
+                      user.get("login") or "", user.get("type") or "",
+                      (d.get("base") or {}).get("sha") or "")
 
     def pr_commits(self, repo: str, pr: int) -> List[Commit]:
         return [
@@ -221,7 +227,9 @@ class ReplayGitHub:
 
         "pr_head":     {"owner/repo|7": "c1"}
         "pr_info":     {"owner/repo|7": {"title": "t", "body": "b", "head_sha": "c1",
-                                         "head_ref": "cu-1-x", "labels": ["gate:G1"]}}
+                                         "head_ref": "cu-1-x", "labels": ["gate:G1"],
+                                         "author": "dependabot[bot]", "author_type": "Bot",
+                                         "base_sha": "b0"}}
         "pr_commits":  {"owner/repo|7": [{"sha": "c1", "parent": null,
                                           "date": "2026-01-01T08:00:00Z",
                                           "message": "m", "author_name": "n",
@@ -266,7 +274,8 @@ class ReplayGitHub:
     def pr_info(self, repo: str, pr: int) -> PrInfo:
         d = self._lookup("pr_info", repo, pr)
         return PrInfo(d["title"], d.get("body") or "", d["head_sha"], d["head_ref"],
-                      tuple(d.get("labels", [])))
+                      tuple(d.get("labels", [])), d.get("author", ""), d.get("author_type", ""),
+                      d.get("base_sha", ""))
 
     def pr_commits(self, repo: str, pr: int) -> List[Commit]:
         return [Commit(c["sha"], c.get("parent"), c["date"], c.get("message", ""),

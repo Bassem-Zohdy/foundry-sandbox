@@ -142,7 +142,7 @@ Vitest runs every `*.spec.*` and `*.test.*` file by default, including the Playw
 
 ## Serving: `nginx.conf` and `Dockerfile.web`
 
-`Dockerfile.web` runs `npm ci` and `npm run build` on Node 22, then copies `dist/` into
+`Dockerfile.web` runs `npm ci` and `npm run build` on Node 24, then copies `dist/` into
 `nginxinc/nginx-unprivileged`, which runs as user 101 on port 8080. `nginx.conf` becomes the
 image's envsubst template: at start, `${API_ORIGIN}` is replaced from the container's
 environment (`docker run -e API_ORIGIN=https://api.example.com`); empty means only this host.

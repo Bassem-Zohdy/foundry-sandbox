@@ -41,6 +41,11 @@ sys.exit(main(sys.argv[1:]))
 _SKIP_NAMES = {".DS_Store"}
 _SKIP_DIRS = {"__pycache__"}
 
+
+def _skip_name(name: str) -> bool:
+    """Files that are never template content: OS litter and compiled Python."""
+    return name in _SKIP_NAMES or name.endswith((".pyc", ".pyo"))
+
 Action = Literal["create", "conflict", "skip"]
 
 
@@ -85,7 +90,7 @@ def _files(config: Config, source: Path) -> Dict[Path, Tuple[bytes, int]]:
     for root, dirs, names in os.walk(source):
         dirs[:] = sorted(d for d in dirs if d not in _SKIP_DIRS)
         for name in sorted(names):
-            if name in _SKIP_NAMES:
+            if _skip_name(name):
                 continue
             full = Path(root) / name
             data = full.read_bytes()

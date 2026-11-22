@@ -6,6 +6,9 @@ foundry_cli/cli.py
 foundry_cli/codeowners.py
 foundry_cli/commands.py
 foundry_cli/config.py
+foundry_cli/dep_ci_files.py
+foundry_cli/dep_manifests.py
+foundry_cli/dep_update.py
 foundry_cli/dependabot.py
 foundry_cli/detect.py
 foundry_cli/diffinfo.py

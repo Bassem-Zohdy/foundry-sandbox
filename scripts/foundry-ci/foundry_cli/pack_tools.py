@@ -12,7 +12,7 @@ from .cli import register
 from .config import Config, ConfigError, load_config
 from .pack_layout import pack_root
 from .packs import Component, Pack, enabled_components, load_pack
-from .template import Change, _classify, _SKIP_DIRS, _SKIP_NAMES, write_files
+from .template import Change, _classify, _SKIP_DIRS, _skip_name, write_files
 
 NO_PACKAGE_JSON = "package.json not found"
 RUNTIME, DEV = "dependencies", "devDependencies"
@@ -194,7 +194,7 @@ def _scaffold_files(source: Path, dest: str) -> Dict[Path, "tuple[bytes, int]"]:
     out = {}
     for root, dirs, names in os.walk(source):
         dirs[:] = sorted(d for d in dirs if d not in _SKIP_DIRS)
-        for name in sorted(n for n in names if n not in _SKIP_NAMES):
+        for name in sorted(n for n in names if not _skip_name(n)):
             full = Path(root) / name
             out[Path(dest) / full.relative_to(source)] = (
                 full.read_bytes(), full.stat().st_mode & 0o777)

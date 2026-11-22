@@ -113,7 +113,7 @@ let globs;
 try {
   globs = [].concat(JSON.parse(fs.readFileSync(process.argv[3], 'utf8')).project ?? '**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}');
 } catch {
-  console.log(-1); // unreadable: knip itself crashes on it, with its own message
+  process.stdout.write('-1'); // unreadable: knip itself crashes on it, with its own message
   process.exit(0);
 }
 const toRe = (glob) =>
@@ -132,7 +132,8 @@ const toRe = (glob) =>
 const take = globs.filter((g) => !g.startsWith('!')).map(toRe);
 const skip = globs.filter((g) => g.startsWith('!')).map((g) => toRe(g.slice(1)));
 const files = fs.readFileSync(process.argv[2], 'utf8').split('\0').filter(Boolean);
-console.log(files.filter((f) => take.some((r) => r.test(f)) && !skip.some((r) => r.test(f))).length);
+// not console.log: FORCE_COLOR makes it paint a number, and the shell compares the text
+process.stdout.write(String(files.filter((f) => take.some((r) => r.test(f)) && !skip.some((r) => r.test(f))).length));
 JS
   ) || fail "knip.json project globs could not be checked"
   if [ "$n" -eq 0 ] && sources_exist; then
@@ -310,7 +311,7 @@ ts_coverage() { # pack root out
   out=$(cd "$3" && pwd)
   cd "$repo/$2" || fail "pack root $2 is not a folder"
   ts_package_manager
-  if [ "$(node -p "Boolean(require('./package.json').scripts?.['test:coverage'])")" != "true" ]; then
+  if [ "$(node -p "String(Boolean(require('./package.json').scripts?.['test:coverage']))")" != "true" ]; then
     echo "::error::$2/package.json has no \"test:coverage\" script; it must run the tests and write coverage/lcov.info (see docs/foundry/stacks/${ts_doc:-typescript.md})"
     exit 1
   fi
