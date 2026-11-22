@@ -48,6 +48,8 @@ class Commit:
     message: str = ""  # full commit message
     author_name: str = ""
     author_email: str = ""
+    committer_login: str = ""  # the GitHub account that committed; "web-flow" for GitHub itself
+    verified: bool = False  # GitHub verified the commit's signature
 
 
 @dataclass(frozen=True)
@@ -170,7 +172,9 @@ class GhCli:
                    c["commit"]["committer"]["date"],
                    c["commit"].get("message") or "",
                    (c["commit"].get("author") or {}).get("name") or "",
-                   (c["commit"].get("author") or {}).get("email") or "")
+                   (c["commit"].get("author") or {}).get("email") or "",
+                   (c.get("committer") or {}).get("login") or "",
+                   (c["commit"].get("verification") or {}).get("verified") is True)
             for c in self._get(f"repos/{repo}/pulls/{pr}/commits", paginate=True)
         ]
 
@@ -233,8 +237,9 @@ class ReplayGitHub:
         "pr_commits":  {"owner/repo|7": [{"sha": "c1", "parent": null,
                                           "date": "2026-01-01T08:00:00Z",
                                           "message": "m", "author_name": "n",
-                                          "author_email": "e"}]}
-                       (message and the author fields are optional)
+                                          "author_email": "e", "committer_login": "web-flow",
+                                          "verified": true}]}
+                       (message, the author and the committer fields are optional)
         "file_at":     {"owner/repo|c1|docs/stories/x.md": "text" | null}
         "pr_comments": {"owner/repo|7": [{"author": "a", "body": "b",
                                           "created_at": "2026-01-01T09:00:00Z",
@@ -279,7 +284,8 @@ class ReplayGitHub:
 
     def pr_commits(self, repo: str, pr: int) -> List[Commit]:
         return [Commit(c["sha"], c.get("parent"), c["date"], c.get("message", ""),
-                       c.get("author_name", ""), c.get("author_email", ""))
+                       c.get("author_name", ""), c.get("author_email", ""),
+                       c.get("committer_login", ""), c.get("verified") is True)
                 for c in self._lookup("pr_commits", repo, pr)]
 
     def file_at(self, repo: str, sha: str, path: str) -> Optional[str]:
