@@ -14,6 +14,7 @@ from .gh import GitHub, PrInfo
 
 DEPENDABOT_LOGIN = "dependabot[bot]"
 DEPENDABOT_EMAIL = "49699333+dependabot[bot]@users.noreply.github.com"
+GITHUB_COMMITTER = "web-flow"  # the account GitHub commits and signs as (seen on Dependabot's commits)
 LOCKFILES = ("package-lock.json", "pnpm-lock.yaml", "yarn.lock", "uv.lock", "poetry.lock")
 _REQUIREMENTS_RE = re.compile(r"^requirements[^/]*\.txt$")
 _WORKFLOW_RE = re.compile(r"^\.github/workflows/[^/]+\.ya?ml$")
@@ -44,11 +45,20 @@ def _checker(path: str) -> Optional[Callable[[str, str], bool]]:
 
 
 def commit_problem(commits: List[Any]) -> Optional[str]:
-    """The first PR commit not authored by Dependabot's own noreply address, named."""
+    """The first PR commit that Dependabot did not make, named.
+
+    Dependabot's commits carry its noreply author address, are committed by GitHub's `web-flow`
+    account and carry a signature GitHub verified. A person can set the author address on a commit
+    they push, but not GitHub's signature, so all three are required.
+    """
     for c in commits:
         if c.author_email.casefold() != DEPENDABOT_EMAIL:
             return (f"commit {c.sha[:7]} is authored by {c.author_email or 'an unknown address'}, "
                     "not Dependabot")
+        if not c.verified or c.committer_login != GITHUB_COMMITTER:
+            return (f"commit {c.sha[:7]} is not signed by GitHub for Dependabot (committed by "
+                    f"{c.committer_login or 'an unknown account'}, signature "
+                    f"{'verified' if c.verified else 'not verified'})")
     return None
 
 

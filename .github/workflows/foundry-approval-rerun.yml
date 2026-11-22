@@ -2,7 +2,8 @@
 #
 # A /approve-* comment from a trusted author, or a review (approval, changes
 # requested or dismissal), re-runs the PR's own foundry-governance
-# pull_request run, which re-reads comments, reviews and labels.
+# pull_request runs for the head (every one of them), which re-read comments,
+# reviews and labels.
 #
 # This lives in its own workflow on purpose: a run triggered by
 # pull_request_review attaches its check runs to the PR head. If the required
@@ -41,18 +42,24 @@ jobs:
       pull-requests: read
       actions: write
     steps:
-      - name: Re-run the governance run for the PR head
+      - name: Re-run every governance run for the PR head
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR: ${{ github.event.issue.number || github.event.pull_request.number }}
+        # A PR gets one pull_request run per event (opened, each label added, ...), and the
+        # ruleset counts every one of them, so every run for the head is re-run, not only the newest.
         run: |
           set -euo pipefail
           sha=$(gh api "repos/$GH_REPO/pulls/$PR" --jq .head.sha)
-          run_id=$(gh api "repos/$GH_REPO/actions/workflows/foundry-governance.yml/runs?event=pull_request&head_sha=$sha&per_page=1" --jq '.workflow_runs[0].id // empty')
-          if [ -z "$run_id" ]; then
+          run_ids=$(gh api --paginate "repos/$GH_REPO/actions/workflows/foundry-governance.yml/runs?event=pull_request&head_sha=$sha&per_page=100" --jq '.workflow_runs[].id')
+          if [ -z "$run_ids" ]; then
             echo "no foundry-governance pull_request run found for $sha" >&2
             exit 1
           fi
-          gh run watch "$run_id" > /dev/null || true
-          gh run rerun "$run_id"
+          failed=0
+          for run_id in $run_ids; do
+            gh run watch "$run_id" > /dev/null || true
+            gh run rerun "$run_id" || { echo "could not re-run $run_id" >&2; failed=1; }
+          done
+          exit "$failed"
